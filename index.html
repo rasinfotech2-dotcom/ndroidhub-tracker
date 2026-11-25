@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NdroidHub Daily Kaam Tracker (20 Platforms)</title>
+
+  <!-- PWA Meta & Manifest -->
+  <meta name="theme-color" content="#4f46e5" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="NdroidHub" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen antialiased selection:bg-indigo-600 selection:text-white">
+
+  <!-- Toast Notification Container -->
+  <div id="toastBox" class="fixed bottom-5 right-5 z-50 pointer-events-none flex flex-col gap-2"></div>
+
+  <!-- Top Direct Bookmark / PWA Install Banner -->
+  <div class="bg-indigo-600 text-white text-xs py-2 px-4">
+    <div class="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-2">
+      <div class="flex items-center gap-2 font-medium">
+        <span>📌 <strong>NdroidHub PWA:</strong> Mobile ya Laptop par App Icon banayein aur bina browser bar ke direct open karein.</span>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button onclick="triggerInstallApp()" id="installAppBtn" class="px-3 py-1 rounded-lg bg-white text-indigo-700 hover:bg-indigo-50 font-bold transition cursor-pointer shadow-xs">
+          📲 Save App Icon
+        </button>
+        <button onclick="openSyncModal()" class="px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white font-semibold transition cursor-pointer">
+          ⚙️ Cloud Sync
+        </button>
+        <button onclick="copyPageLink()" class="px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white font-semibold transition cursor-pointer">
+          🔗 Copy Link
+        </button>
+      </div>
+    </div>
+    <!-- 1-Line iOS Safari / Manual Install Guide (Hidden unless needed) -->
+    <div id="iosInstallHint" class="hidden max-w-4xl mx-auto mt-1.5 pt-1.5 border-t border-white/20 text-[11px] text-indigo-100 flex items-center justify-between gap-2">
+      <span>📱 <strong>iPhone / Safari:</strong> Niche <strong>Share (⬆️)</strong> button dabayein → <strong>"Add to Home Screen"</strong> chunein. (Desktop Chrome/Edge me address bar ke <strong>Install</strong> icon par click karein.)</span>
+      <button onclick="document.getElementById('iosInstallHint').classList.add('hidden')" class="text-white font-bold cursor-pointer">✕</button>
+    </div>
+  </div>
+
+  <!-- Top Sticky Header -->
+  <header class="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-3">
+      
+      <!-- Brand Title -->
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white font-extrabold text-sm flex items-center justify-center shadow-sm">
+          NH
+        </div>
+        <div>
+          <h1 class="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+            NdroidHub Daily Kaam Tracker
+          </h1>
+          <p class="text-xs text-slate-500">
+            20 Platforms Checklist • Kisme Kya Karna Hai (Hinglish)
+          </p>
+        </div>
+      </div>
+
+      <!-- Sync Badge & Progress -->
+      <div class="flex items-center gap-2.5">
+        <button onclick="openSyncModal()" id="autoSaveStatus" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium cursor-pointer hover:bg-emerald-100 transition" title="Sync settings kholein">
+          <span id="syncDot" class="w-2 h-2 rounded-full bg-amber-500"></span>
+          <span id="autoSaveLabel">Local Saved</span>
+        </button>
+
+        <div class="px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold">
+          <span id="doneCounter">0 / 20</span> Kaam Done
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+
+    <!-- Date Selector Bar -->
+    <section class="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <span class="text-[11px] font-semibold uppercase tracking-wider text-indigo-600">
+            Date-Wise Record
+          </span>
+          <h2 id="readableDateTitle" class="text-base sm:text-lg font-bold text-slate-900">
+            Loading date...
+          </h2>
+          <p id="dayFocusLine" class="text-xs text-slate-600 mt-0.5">
+            Aaj ka focus loading...
+          </p>
+        </div>
+
+        <!-- Prev / Date Input / Next / Today -->
+        <div class="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+          <button onclick="shiftDate(-1)" class="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold border border-slate-200 transition cursor-pointer">
+            ◀ Pichla Din
+          </button>
+          <input type="date" id="datePicker" onchange="setSelectedDate(this.value)" class="px-2.5 py-1.5 rounded-lg bg-white text-slate-900 text-xs sm:text-sm font-semibold border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer" />
+          <button onclick="shiftDate(1)" class="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold border border-slate-200 transition cursor-pointer">
+            Agla Din ▶
+          </button>
+          <button onclick="goToday()" class="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition cursor-pointer">
+            Aaj
+          </button>
+        </div>
+      </div>
+
+      <!-- Clean Progress Bar + Missed Tasks Toggle -->
+      <div class="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex-1 min-w-[200px]">
+          <div class="flex justify-between text-xs font-medium text-slate-500 mb-1">
+            <span>Aaj ki Progress</span>
+            <span id="progressPctText" class="font-bold text-slate-800">0%</span>
+          </div>
+          <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div id="progressBar" class="h-full bg-emerald-500 rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="toggleMissedDrawer()" id="missedToggleBtn" class="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-semibold transition cursor-pointer">
+            ⏳ Chhoote Hue Kaam (<span id="missedCountText">0</span>)
+          </button>
+          <button onclick="hardSaveAllCurrentDate()" class="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition cursor-pointer">
+            🔒 Sab Hard Save Karein
+          </button>
+        </div>
+      </div>
+
+      <!-- Collapsible Missed Tasks Panel -->
+      <div id="missedDrawer" class="hidden pt-3 border-t border-slate-200 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-amber-800">
+            Pichhle 7 dino ke adhure daily kaam (yahin se tick & Hard Save karein ya us date par jayein):
+          </span>
+          <button onclick="toggleMissedDrawer()" class="text-xs text-slate-500 hover:text-slate-800 font-semibold cursor-pointer">
+            Band Karein ✕
+          </button>
+        </div>
+        <div id="missedListContainer" class="space-y-2 max-h-64 overflow-y-auto pr-1"></div>
+      </div>
+    </section>
+
+    <!-- Simple Category Filter Pills -->
+    <section class="flex flex-wrap items-center gap-2">
+      <button onclick="setFilter('ALL')" data-filter="ALL" class="filter-btn px-3.5 py-1.5 rounded-full text-xs font-semibold bg-indigo-600 text-white shadow-xs cursor-pointer">
+        Sabhi (All 20)
+      </button>
+      <button onclick="setFilter('DAILY')" data-filter="DAILY" class="filter-btn px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 cursor-pointer">
+        ⚡ Daily / Regular Kaam
+      </button>
+      <button onclick="setFilter('UI')" data-filter="UI" class="filter-btn px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 cursor-pointer">
+        📱 UI Kits
+      </button>
+      <button onclick="setFilter('ICONS')" data-filter="ICONS" class="filter-btn px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 cursor-pointer">
+        🎨 Icons & Logos
+      </button>
+      <button onclick="setFilter('SAAS')" data-filter="SAAS" class="filter-btn px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 cursor-pointer">
+        🚀 SaaS Software
+      </button>
+    </section>
+
+    <!-- Main 20-Platform Checklist -->
+    <section id="checklistContainer" class="space-y-2.5"></section>
+
+    <!-- Collapsible Bottom Reference Guide (Non-Intrusive) -->
+    <details class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+      <summary class="px-5 py-4 text-sm font-bold text-slate-800 cursor-pointer hover:bg-slate-50 flex items-center justify-between select-none">
+        <span>🕸️ Traffic Jaal & Weekly Posting Guide (Hinglish Reference)</span>
+        <span class="text-xs font-medium text-indigo-600">Click to Open / Close</span>
+      </summary>
+      <div class="px-5 pb-5 pt-2 border-t border-slate-100 space-y-4 text-xs text-slate-600 leading-relaxed">
+        
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+            <div class="font-bold text-slate-900 mb-1">1. Traffic Engine</div>
+            <p>Pinterest Pins + Hashnode/Dev.to/Medium SEO + YouTube/LinkedIn videos se visitors laayein.</p>
+          </div>
+          <div class="p-3 rounded-xl bg-indigo-50/60 border border-indigo-200">
+            <div class="font-bold text-indigo-900 mb-1">2. Free Lead Magnet</div>
+            <p>Visitors ko pehle GitHub starter repo ya Figma Community (5 Free Screens) par bhejein.</p>
+          </div>
+          <div class="p-3 rounded-xl bg-emerald-50/60 border border-emerald-200">
+            <div class="font-bold text-emerald-900 mb-1">3. Paid Conversion</div>
+            <p>Developer UI Kit ($18-$99) lega, Designer Icons/Figma pack lega, aur Business Owner SaaS ya Contra Agency ($350+) lega.</p>
+          </div>
+        </div>
+
+        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+          <div class="font-bold text-slate-900">📅 Hafte ka Simple Schedule (Pinterest, LinkedIn & YouTube):</div>
+          <ul class="list-disc list-inside space-y-1">
+            <li><strong>Monday (Somwar):</strong> UI Kits & Code Templates ka demo / preview post karein.</li>
+            <li><strong>Wednesday (Budhwar):</strong> Minimalist Logos, SVG Icon packs & Shutterstock vectors showcase/upload karein.</li>
+            <li><strong>Friday (Shukrawar):</strong> Live Web SaaS demo video aur B2B agency outreach karein.</li>
+            <li><strong>SEO Canonical Rule:</strong> Pehle <em>Hashnode</em> par main article publish karein, phir usi ko <em>Dev.to</em> aur <em>Medium</em> par canonical URL ke saath daalein.</li>
+          </ul>
+        </div>
+
+      </div>
+    </details>
+
+  </main>
+
+  <!-- Cloud Sync Settings Modal (GitHub Gist Sync) -->
+  <div id="syncModal" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-slate-900">☁️ Cross-Device Cloud Sync (GitHub Gist)</h3>
+        <button onclick="closeSyncModal()" class="text-slate-400 hover:text-slate-700 font-bold cursor-pointer">✕</button>
+      </div>
+
+      <p class="text-xs text-slate-600 leading-relaxed">
+        Laptop aur Mobile ke beech live data sync karne ke liye apna <strong>GitHub Personal Access Token</strong> (sirf <code>gist</code> permission wala) daalein. Token aapke browser me hi safe rehta hai.
+      </p>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">GitHub Token (gist scope)</label>
+          <input id="gistTokenInput" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Gist ID (Khali chhodein naya banane ke liye)</label>
+          <input id="gistIdInput" type="text" placeholder="Auto-create hoga ya existing Gist ID daalein" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+        <button onclick="disconnectGistSync()" class="px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 cursor-pointer">
+          Disconnect
+        </button>
+        <div class="flex items-center gap-2">
+          <button onclick="pullFromGist(true)" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold cursor-pointer">
+            ⬇️ Pull Data
+          </button>
+          <button onclick="saveGistSettings()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold cursor-pointer">
+            Save & Sync Now
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. ALL 20 PLATFORMS MASTER CHECKLIST (CLEAN HINGLISH)
+    // =========================================================================
+    const PLATFORMS_CHECKLIST = [
+      {
+        id: 1,
+        name: "Gumroad",
+        url: "https://ndroidhub.gumroad.com",
+        categories: ["UI", "ICONS", "SAAS"],
+        isDaily: false,
+        action: "Teeno products (UI Kits, Icons, SaaS bundles & license keys) ek hi storefront (ndroidhub.gumroad.com) par bundle banakar list/check karein."
+      },
+      {
+        id: 2,
+        name: "Lemon Squeezy",
+        url: "https://lemonsqueezy.com",
+        categories: ["UI", "ICONS", "SAAS"],
+        isDaily: false,
+        action: "SaaS subscriptions checkout ke saath UI Kits aur Icon packs ke bundles list karein."
+      },
+      {
+        id: 3,
+        name: "Codester",
+        url: "https://codester.com",
+        categories: ["UI", "ICONS", "SAAS"],
+        isDaily: false,
+        action: "Ek hi seller account se Flutter/Web Kits, Vector Icons/Logos, aur PHP/JS SaaS scripts upload karein."
+      },
+      {
+        id: 4,
+        name: "Envato Market",
+        url: "https://themeforest.net",
+        categories: ["UI", "ICONS", "SAAS"],
+        isDaily: false,
+        action: "Ek hi author account se ThemeForest (UI Kits), GraphicRiver (Icons/Logos), aur CodeCanyon (SaaS Scripts) par upload karein."
+      },
+      {
+        id: 5,
+        name: "AppSumo",
+        url: "https://appsumo.com",
+        categories: ["SAAS"],
+        isDaily: false,
+        action: "30 din baad sirf Live Web SaaS ki Lifetime Deal (LTD) dalein (UI Kits/Icons yahan allowed nahi hain)."
+      },
+      {
+        id: 6,
+        name: "PitchGround / DealMirror",
+        url: "https://pitchground.com",
+        categories: ["SAAS"],
+        isDaily: false,
+        action: "Live B2B SaaS ki Lifetime Deals (LTD) launch aur manage karein."
+      },
+      {
+        id: 7,
+        name: "Product Hunt",
+        url: "https://producthunt.com",
+        categories: ["UI", "ICONS", "SAAS"],
+        isDaily: false,
+        action: "Major UI Kits, Free Icon Packs, aur Main SaaS ka bada launch schedule/post karein."
+      },
+      {
+        id: 8,
+        name: "IconScout / Flaticon",
+        url: "https://iconscout.com",
+        categories: ["ICONS"],
+        isDaily: false,
+        action: "UI Kits mein bane hue icons ko alag pack banakar royalty ke liye upload karein."
+      },
+      {
+        id: 9,
+        name: "Figma Community",
+        url: "https://figma.com/community",
+        categories: ["UI", "ICONS", "SAAS"],
+        isDaily: false,
+        action: "UI Kits, Icon sets, aur SaaS design system ke free samples dalein taaki funnel bane."
+      },
+      {
+        id: 10,
+        name: "GitHub",
+        url: "https://github.com",
+        categories: ["UI", "ICONS", "SAAS"],
+        isDaily: false,
+        action: "Starter templates, SVG icon library, aur SaaS open-source core/demo dalein aur store links lagayein."
+      },
+      {
+        id: 11,
+        name: "Behance",
+        url: "https://behance.net",
+        categories: ["UI", "ICONS", "SAAS"],
+        isDaily: false,
+        action: "UI Kits, Branding/Logos aur SaaS UI/UX ki 6–8 slides ki visual case study daalein aur upar-neeche store links lagayein."
+      },
+      {
+        id: 12,
+        name: "Dribbble",
+        url: "https://dribbble.com",
+        categories: ["UI", "ICONS", "SAAS"],
+        isDaily: true,
+        action: "Rozana 1 UI shot, Icon/Logo shot, ya SaaS dashboard shot post karein aur description ki pehli line mein store link rakhein."
+      },
+      {
+        id: 13,
+        name: "Pinterest",
+        url: "https://pinterest.com",
+        categories: ["UI", "ICONS", "SAAS"],
+        isDaily: true,
+        action: "1000x1500 px vertical pins (UI mockups, Logo grids, SaaS infographics) banakar boards mein daalein -> direct store URL lagayein."
+      },
+      {
+        id: 14,
+        name: "Dev.to",
+        url: "https://dev.to",
+        categories: ["UI", "ICONS", "SAAS"],
+        isDaily: true,
+        action: "Flutter/React guides, SVG tips, aur SaaS tutorials publish karein + teeno products ke interlinks lagayein."
+      },
+      {
+        id: 15,
+        name: "Hashnode",
+        url: "https://hashnode.com",
+        categories: ["UI", "ICONS", "SAAS"],
+        isDaily: true,
+        action: "Main tech deep-dives, Design system aur SaaS architecture blogs — sabse pehle yahan publish karein."
+      },
+      {
+        id: 16,
+        name: "Medium",
+        url: "https://medium.com",
+        categories: ["UI", "ICONS", "SAAS"],
+        isDaily: true,
+        action: "MVP launch guides, Branding & Business growth articles publish karein (Hashnode canonical link ke saath)."
+      },
+      {
+        id: 17,
+        name: "LinkedIn",
+        url: "https://linkedin.com",
+        categories: ["UI", "ICONS", "SAAS"],
+        isDaily: true,
+        action: "20-sec demo video / Build in Public post daalein (Mon: UI, Wed: Icons, Fri: SaaS) + DM me free sample & agency offer bhejein."
+      },
+      {
+        id: 18,
+        name: "YouTube (NdroidHub Studio)",
+        url: "https://youtube.com",
+        categories: ["UI", "ICONS", "SAAS"],
+        isDaily: false,
+        action: "NdroidHub Studio channel par UI walkthrough, Speed design tips, aur SaaS demo playlists update karein."
+      },
+      {
+        id: 19,
+        name: "Contra",
+        url: "https://contra.com",
+        categories: ["UI", "ICONS", "SAAS"],
+        isDaily: false,
+        action: "Custom app, Branding aur MVP development portfolio update rakhein — 0% commission client projects ke liye."
+      },
+      {
+        id: 20,
+        name: "Shutterstock Contributor",
+        url: "https://submit.shutterstock.com",
+        categories: ["ICONS", "UI"],
+        isDaily: true,
+        action: "UI Kits me bane SVG Vectors, minimal Icons, aur UI Illustrations ko EPS/SVG format me upload karein + SEO keywords/tags bharein passive royalty income ke liye."
+      }
+    ];
+
+    const DAY_FOCUS_HINGLISH = [
+      "Sunday Focus: Hafte ka review karein aur agle hafte ke Pinterest pins + blog drafts ready rakhein.",
+      "Monday Focus: UI Kits & Code Templates (Gumroad, Codester, ThemeForest, LinkedIn & YouTube UI demo).",
+      "Tuesday Focus: SEO & Free Funnel (Hashnode -> Dev.to -> Medium article + GitHub/Figma free sample links).",
+      "Wednesday Focus: Icons & Logos Day (IconScout/Flaticon, Shutterstock EPS/SVG, Pinterest icon grids, Dribbble shot).",
+      "Thursday Focus: Visual Case Study Day (Behance 6–8 slide case study + Dribbble interactive shot).",
+      "Friday Focus: SaaS & Agency Day (Lemon Squeezy, YouTube SaaS demo, LinkedIn 20s video + Contra outreach).",
+      "Saturday Focus: All-Access Bundle ($99) promotion aur pichhle chhoote hue kaam complete karein."
+    ];
+
+    // =========================================================================
+    // 2. LOCALSTORAGE + GITHUB GIST CLOUD SYNC PERSISTENCE
+    // =========================================================================
+    const LOCAL_STORAGE_KEY = "ndroidhub_tracker_records_v3";
+    const GIST_CONFIG_KEY = "ndroidhub_gist_sync_config_v1";
+    const GIST_FILENAME = "ndroidhub-tracker-data.json";
+
+    let deferredInstallPrompt = null;
+    let syncInFlight = false;
+
+    let state = {
+      selectedDate: getTodayStr(),
+      activeFilter: "ALL",
+      records: {}
+    };
+
+    function getTodayStr() {
+      const now = new Date();
+      const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+      return local.toISOString().split("T")[0];
+    }
+
+    function ensureDateBucket(dateStr) {
+      if (!state.records[dateStr]) {
+        state.records[dateStr] = {};
+      }
+    }
+
+    function loadLocalRecords() {
+      try {
+        const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.records) {
+            state.records = parsed.records;
+          }
+        }
+      } catch (err) {
+        console.warn("Local storage read error:", err);
+      }
+      ensureDateBucket(state.selectedDate);
+    }
+
+    function saveLocalRecords() {
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
+          records: state.records,
+          updatedAt: new Date().toISOString()
+        }));
+      } catch (err) {
+        console.warn("Local storage write error:", err);
+      }
+    }
+
+    function getGistConfig() {
+      try {
+        const raw = localStorage.getItem(GIST_CONFIG_KEY);
+        return raw ? JSON.parse(raw) : { token: "", gistId: "" };
+      } catch {
+        return { token: "", gistId: "" };
+      }
+    }
+
+    function saveGistConfig(cfg) {
+      localStorage.setItem(GIST_CONFIG_KEY, JSON.stringify(cfg));
+    }
+
+    function updateSyncStatusUI(text, isCloud) {
+      const label = document.getElementById("autoSaveLabel");
+      const dot = document.getElementById("syncDot");
+      const timeStr = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+      if (label) label.textContent = `${text} • ${timeStr}`;
+      if (dot) {
+        dot.className = isCloud
+          ? "w-2 h-2 rounded-full bg-emerald-500 animate-pulse"
+          : "w-2 h-2 rounded-full bg-amber-500";
+      }
+    }
+
+    async function pushToGist(statusLabel = "Cloud Synced") {
+      const cfg = getGistConfig();
+      if (!cfg.token) {
+        updateSyncStatusUI("Local Saved", false);
+        return false;
+      }
+      if (syncInFlight) return false;
+      syncInFlight = true;
+
+      try {
+        const payload = {
+          description: "NdroidHub Daily Kaam Tracker Sync Data",
+          public: false,
+          files: {
+            [GIST_FILENAME]: {
+              content: JSON.stringify({
+                records: state.records,
+                updatedAt: new Date().toISOString()
+              }, null, 2)
+            }
+          }
+        };
+
+        const endpoint = cfg.gistId
+          ? `https://api.github.com/gists/${cfg.gistId}`
+          : "https://api.github.com/gists";
+        const method = cfg.gistId ? "PATCH" : "POST";
+
+        const res = await fetch(endpoint, {
+          method,
+          headers: {
+            "Authorization": `Bearer ${cfg.token}`,
+            "Accept": "application/vnd.github+json",
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+        const data = await res.json();
+        if (!cfg.gistId && data.id) {
+          cfg.gistId = data.id;
+          saveGistConfig(cfg);
+          const idInput = document.getElementById("gistIdInput");
+          if (idInput) idInput.value = data.id;
+        }
+        updateSyncStatusUI(`☁️ ${statusLabel}`, true);
+        return true;
+      } catch (err) {
+        console.error("Gist push failed:", err);
+        updateSyncStatusUI("Local Saved (Sync Err)", false);
+        return false;
+      } finally {
+        syncInFlight = false;
+      }
+    }
+
+    window.pullFromGist = async function (notify = false) {
+      const cfg = getGistConfig();
+      if (!cfg.token || !cfg.gistId) {
+        if (notify) showToast("⚠️ Pehle GitHub Token aur Gist ID save karein.");
+        return false;
+      }
+
+      try {
+        const res = await fetch(`https://api.github.com/gists/${cfg.gistId}`, {
+          headers: {
+            "Authorization": `Bearer ${cfg.token}`,
+            "Accept": "application/vnd.github+json"
+          }
+        });
+        if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+        const data = await res.json();
+        const file = data.files && data.files[GIST_FILENAME];
+        if (file && file.content) {
+          const parsed = JSON.parse(file.content);
+          if (parsed && parsed.records) {
+            // Merge remote records with local records
+            Object.keys(parsed.records).forEach((dStr) => {
+              state.records[dStr] = {
+                ...(state.records[dStr] || {}),
+                ...parsed.records[dStr]
+              };
+            });
+            saveLocalRecords();
+            ensureDateBucket(state.selectedDate);
+            renderApp();
+            updateSyncStatusUI("☁️ Cloud Synced", true);
+            if (notify) showToast("☁️ Cloud se latest data pull ho gaya!");
+            return true;
+          }
+        }
+      } catch (err) {
+        console.error("Gist pull failed:", err);
+        if (notify) showToast("⚠️ Cloud data pull karne me error aaya.");
+      }
+      return false;
+    };
+
+    function persistDateRecord(dateStr, statusLabel = "Auto-Saved") {
+      ensureDateBucket(dateStr);
+      saveLocalRecords();
+      const cfg = getGistConfig();
+      if (cfg.token) {
+        pushToGist(statusLabel);
+      } else {
+        updateSyncStatusUI(`💾 ${statusLabel}`, false);
+      }
+    }
+
+    // =========================================================================
+    // 3. SYNC MODAL & PWA INSTALL FLOW
+    // =========================================================================
+    window.openSyncModal = function () {
+      const cfg = getGistConfig();
+      document.getElementById("gistTokenInput").value = cfg.token || "";
+      document.getElementById("gistIdInput").value = cfg.gistId || "";
+      document.getElementById("syncModal").classList.remove("hidden");
+    };
+
+    window.closeSyncModal = function () {
+      document.getElementById("syncModal").classList.add("hidden");
+    };
+
+    window.saveGistSettings = async function () {
+      const token = document.getElementById("gistTokenInput").value.trim();
+      const gistId = document.getElementById("gistIdInput").value.trim();
+      if (!token) {
+        showToast("⚠️ GitHub Token daalna zaroori hai.");
+        return;
+      }
+      saveGistConfig({ token, gistId });
+      if (gistId) {
+        await window.pullFromGist(false);
+      }
+      const ok = await pushToGist("Cloud Synced");
+      if (ok) {
+        showToast("☁️ Cloud Sync ON ho gaya! Ab mobile & laptop synced rahenge.");
+        window.closeSyncModal();
+      } else {
+        showToast("⚠️ Token ya Gist ID check karein.");
+      }
+    };
+
+    window.disconnectGistSync = function () {
+      localStorage.removeItem(GIST_CONFIG_KEY);
+      document.getElementById("gistTokenInput").value = "";
+      document.getElementById("gistIdInput").value = "";
+      updateSyncStatusUI("Local Saved", false);
+      showToast("🔌 Cloud Sync disconnect ho gaya (Local data safe hai).");
+      window.closeSyncModal();
+    };
+
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      const btn = document.getElementById("installAppBtn");
+      if (btn) btn.textContent = "📲 Install App Icon";
+    });
+
+    window.triggerInstallApp = async function () {
+      if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        const choice = await deferredInstallPrompt.userChoice;
+        if (choice.outcome === "accepted") {
+          showToast("🎉 NdroidHub App aapke device par install ho gaya!");
+        }
+        deferredInstallPrompt = null;
+        return;
+      }
+      // Show 1-line guide for iOS Safari or already-installed / non-prompt browsers
+      const hint = document.getElementById("iosInstallHint");
+      if (hint) hint.classList.remove("hidden");
+      showToast("📌 Browser menu se 'Install App' ya 'Add to Home Screen' chunein.");
+    };
+
+    // =========================================================================
+    // 4. USER ACTIONS (CHECKBOX, HARD SAVE, DATE NAVIGATION)
+    // =========================================================================
+    function showToast(msg) {
+      const box = document.getElementById("toastBox");
+      const el = document.createElement("div");
+      el.className = "bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-lg border border-slate-700 transition-opacity duration-300";
+      el.textContent = msg;
+      box.appendChild(el);
+      setTimeout(() => {
+        el.classList.add("opacity-0");
+        setTimeout(() => el.remove(), 300);
+      }, 2500);
+    }
+
+    window.copyPageLink = function () {
+      const urlToCopy = window.location.href;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(urlToCopy).then(() => {
+          showToast("🔗 Live link copy ho gaya!");
+        }).catch(() => fallbackCopy(urlToCopy));
+      } else {
+        fallbackCopy(urlToCopy);
+      }
+    };
+
+    function fallbackCopy(text) {
+      const tempInput = document.createElement("input");
+      tempInput.value = text;
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      try {
+        document.execCommand("copy");
+        showToast("🔗 Link copy ho gaya!");
+      } catch {
+        showToast("📌 Address bar se link copy/bookmark karein.");
+      }
+      document.body.removeChild(tempInput);
+    }
+
+    window.setSelectedDate = function (dateStr) {
+      if (!dateStr) return;
+      state.selectedDate = dateStr;
+      ensureDateBucket(dateStr);
+      renderApp();
+    };
+
+    window.shiftDate = function (days) {
+      const [y, m, d] = state.selectedDate.split("-").map(Number);
+      const dt = new Date(y, m - 1, d + days);
+      const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000);
+      window.setSelectedDate(local.toISOString().split("T")[0]);
+    };
+
+    window.goToday = function () {
+      window.setSelectedDate(getTodayStr());
+    };
+
+    window.toggleItem = function (platformId) {
+      const dateStr = state.selectedDate;
+      ensureDateBucket(dateStr);
+      const current = state.records[dateStr][platformId] || { done: false, hardSavedTime: null };
+      current.done = !current.done;
+      state.records[dateStr][platformId] = current;
+      renderApp();
+      persistDateRecord(dateStr, "Auto-Saved");
+    };
+
+    window.hardSaveItem = function (platformId, platformName) {
+      const dateStr = state.selectedDate;
+      ensureDateBucket(dateStr);
+      const current = state.records[dateStr][platformId] || { done: false, hardSavedTime: null };
+      const nowTime = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+      current.hardSavedTime = nowTime;
+      state.records[dateStr][platformId] = current;
+      renderApp();
+      persistDateRecord(dateStr, "Hard-Saved");
+      showToast(`🔒 ${platformName} ka record Hard Save ho gaya (${nowTime})`);
+    };
+
+    window.hardSaveAllCurrentDate = function () {
+      const dateStr = state.selectedDate;
+      ensureDateBucket(dateStr);
+      const nowTime = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+      PLATFORMS_CHECKLIST.forEach((item) => {
+        const current = state.records[dateStr][item.id] || { done: false, hardSavedTime: null };
+        current.hardSavedTime = nowTime;
+        state.records[dateStr][item.id] = current;
+      });
+      renderApp();
+      persistDateRecord(dateStr, "All Hard-Saved");
+      showToast(`🔒 ${dateStr} ke sabhi 20 records Hard Save ho gaye!`);
+    };
+
+    window.completeMissedItem = function (pastDateStr, platformId) {
+      ensureDateBucket(pastDateStr);
+      const current = state.records[pastDateStr][platformId] || { done: false, hardSavedTime: null };
+      current.done = true;
+      current.hardSavedTime = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+      state.records[pastDateStr][platformId] = current;
+      renderApp();
+      persistDateRecord(pastDateStr, "Missed Kaam Hard-Saved");
+      showToast(`✅ ${pastDateStr} ka chhoota hua kaam tick & Hard Save ho gaya!`);
+    };
+
+    window.setFilter = function (filterKey) {
+      state.activeFilter = filterKey;
+      document.querySelectorAll(".filter-btn").forEach((btn) => {
+        if (btn.dataset.filter === filterKey) {
+          btn.className = "filter-btn px-3.5 py-1.5 rounded-full text-xs font-semibold bg-indigo-600 text-white shadow-xs cursor-pointer";
+        } else {
+          btn.className = "filter-btn px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 cursor-pointer";
+        }
+      });
+      renderChecklist();
+    };
+
+    window.toggleMissedDrawer = function () {
+      const drawer = document.getElementById("missedDrawer");
+      drawer.classList.toggle("hidden");
+    };
+
+    // =========================================================================
+    // 5. RENDER UI
+    // =========================================================================
+    function renderApp() {
+      renderDateHeader();
+      renderChecklist();
+      renderMissedTasks();
+    }
+
+    function renderDateHeader() {
+      const dateStr = state.selectedDate;
+      document.getElementById("datePicker").value = dateStr;
+
+      const [y, m, d] = dateStr.split("-").map(Number);
+      const dateObj = new Date(y, m - 1, d);
+      const todayStr = getTodayStr();
+      const formatted = dateObj.toLocaleDateString("en-IN", {
+        weekday: "long",
+        day: "numeric",
+        month: "short",
+        year: "numeric"
+      });
+
+      let labelSuffix = "";
+      if (dateStr === todayStr) labelSuffix = " (Aaj)";
+      else if (dateStr < todayStr) labelSuffix = " (Pichhli Date)";
+      else labelSuffix = " (Aane Wali Date)";
+
+      document.getElementById("readableDateTitle").textContent = formatted + labelSuffix;
+      document.getElementById("dayFocusLine").textContent = DAY_FOCUS_HINGLISH[dateObj.getDay()];
+
+      const dayBucket = state.records[dateStr] || {};
+      const total = PLATFORMS_CHECKLIST.length;
+      const doneCount = PLATFORMS_CHECKLIST.filter((p) => dayBucket[p.id]?.done).length;
+      const pct = Math.round((doneCount / total) * 100);
+
+      document.getElementById("doneCounter").textContent = `${doneCount} / ${total}`;
+      document.getElementById("progressPctText").textContent = `${pct}%`;
+      document.getElementById("progressBar").style.width = `${pct}%`;
+    }
+
+    function renderCategoryBadges(cats) {
+      return cats.map((c) => {
+        if (c === "UI") return `<span class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/70">UI Kits</span>`;
+        if (c === "ICONS") return `<span class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-pink-50 text-pink-700 border border-pink-200/70">Icons</span>`;
+        return `<span class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70">SaaS</span>`;
+      }).join("");
+    }
+
+    function renderChecklist() {
+      const container = document.getElementById("checklistContainer");
+      const dateStr = state.selectedDate;
+      const dayBucket = state.records[dateStr] || {};
+
+      const filtered = PLATFORMS_CHECKLIST.filter((item) => {
+        if (state.activeFilter === "DAILY") return item.isDaily;
+        if (state.activeFilter === "UI") return item.categories.includes("UI");
+        if (state.activeFilter === "ICONS") return item.categories.includes("ICONS");
+        if (state.activeFilter === "SAAS") return item.categories.includes("SAAS");
+        return true;
+      });
+
+      container.innerHTML = filtered.map((item) => {
+        const rec = dayBucket[item.id] || { done: false, hardSavedTime: null };
+        const isDone = !!rec.done;
+        const isHardSaved = !!rec.hardSavedTime;
+        const safeName = item.name.replace(/'/g, "\\'");
+
+        return `
+          <div class="bg-white rounded-2xl p-4 border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 ${
+            isDone
+              ? "border-emerald-300 bg-emerald-50/30"
+              : "border-slate-200 hover:border-indigo-300 shadow-2xs"
+          }">
+            
+            <!-- Left: Checkbox + Platform Name + Exact Hinglish Kaam -->
+            <div class="flex items-start gap-3.5 flex-1">
+              <button
+                onclick="toggleItem(${item.id})"
+                aria-label="Mark ${item.name} done"
+                class="mt-0.5 w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition cursor-pointer ${
+                  isDone
+                    ? "bg-emerald-600 border-emerald-600 text-white"
+                    : "border-slate-300 bg-white hover:border-indigo-500"
+                }"
+              >
+                ${isDone ? `<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>` : ""}
+              </button>
+
+              <div class="space-y-1 flex-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="text-sm sm:text-base font-bold text-slate-900 hover:text-indigo-600 transition">
+                    ${item.id}. ${item.name} ↗
+                  </a>
+                  ${item.isDaily ? `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800">⚡ Daily</span>` : ""}
+                  ${renderCategoryBadges(item.categories)}
+                </div>
+
+                <p class="text-xs sm:text-sm leading-relaxed ${isDone ? "line-through text-slate-400" : "text-slate-700"}">
+                  <span class="font-semibold text-slate-800 ${isDone ? "text-slate-400" : ""}">Kya Karna Hai:</span> ${item.action}
+                </p>
+              </div>
+            </div>
+
+            <!-- Right: Individual Hard Save Button & Lock Status -->
+            <div class="flex items-center justify-end gap-2 shrink-0 pl-9 sm:pl-0">
+              ${isHardSaved ? `
+                <span class="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-semibold">
+                  🔒 Hard Saved (${rec.hardSavedTime})
+                </span>
+              ` : ""}
+              <button
+                onclick="hardSaveItem(${item.id}, '${safeName}')"
+                class="px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                  isHardSaved
+                    ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+                    : "bg-slate-100 hover:bg-indigo-600 text-slate-700 hover:text-white border border-slate-200 hover:border-indigo-600"
+                }"
+                title="Is kaam ka status pakka save karein"
+              >
+                ${isHardSaved ? "Hard Saved ✓" : "Hard Save"}
+              </button>
+            </div>
+
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderMissedTasks() {
+      const today = new Date();
+      let missedItems = [];
+
+      // Check last 7 past days for incomplete Daily items
+      for (let i = 1; i <= 7; i++) {
+        const dt = new Date(today);
+        dt.setDate(today.getDate() - i);
+        const ds = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().split("T")[0];
+        const bucket = state.records[ds] || {};
+
+        PLATFORMS_CHECKLIST.filter((p) => p.isDaily).forEach((p) => {
+          if (!bucket[p.id]?.done) {
+            missedItems.push({ dateStr: ds, platform: p });
+          }
+        });
+      }
+
+      document.getElementById("missedCountText").textContent = missedItems.length;
+
+      const listContainer = document.getElementById("missedListContainer");
+      if (missedItems.length === 0) {
+        listContainer.innerHTML = `<p class="text-xs text-emerald-700 font-medium bg-emerald-50 p-3 rounded-xl border border-emerald-200">🎉 Pichhle 7 dino ka koi bhi daily kaam baaki nahi hai!</p>`;
+        return;
+      }
+
+      listContainer.innerHTML = missedItems.map((entry) => `
+        <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-amber-50/60 border border-amber-200/80 text-xs">
+          <div>
+            <button onclick="setSelectedDate('${entry.dateStr}')" class="font-bold text-indigo-700 underline cursor-pointer">
+              ${entry.dateStr}
+            </button>
+            <span class="font-bold text-slate-900 ml-1.5">${entry.platform.id}. ${entry.platform.name}:</span>
+            <span class="text-slate-700">${entry.platform.action}</span>
+          </div>
+          <button onclick="completeMissedItem('${entry.dateStr}', ${entry.platform.id})" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold cursor-pointer shrink-0">
+            ✓ Done & Hard Save
+          </button>
+        </div>
+      `).join("");
+    }
+
+    // Boot Application & Register Service Worker
+    window.addEventListener("load", async () => {
+      loadLocalRecords();
+      renderApp();
+
+      const cfg = getGistConfig();
+      if (cfg.token && cfg.gistId) {
+        await window.pullFromGist(false);
+      }
+
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("./sw.js").catch((err) => {
+          console.warn("Service Worker registration skipped:", err);
+        });
+      }
+    });
+  </script>
+</body>
+</html>
