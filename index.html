@@ -442,10 +442,12 @@
 
     let deferredInstallPrompt = null;
     let syncInFlight = false;
+    let pendingPush = false;
 
     let state = {
       selectedDate: getTodayStr(),
       activeFilter: "ALL",
+      lastUpdated: null,
       records: {}
     };
 
@@ -468,6 +470,7 @@
           const parsed = JSON.parse(raw);
           if (parsed && parsed.records) {
             state.records = parsed.records;
+            state.lastUpdated = parsed.lastUpdated || parsed.updatedAt || null;
           }
         }
       } catch (err) {
@@ -476,11 +479,14 @@
       ensureDateBucket(state.selectedDate);
     }
 
-    function saveLocalRecords() {
+    function saveLocalRecords(touchTimestamp = false) {
+      if (touchTimestamp) {
+        state.lastUpdated = new Date().toISOString();
+      }
       try {
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
           records: state.records,
-          updatedAt: new Date().toISOString()
+          lastUpdated: state.lastUpdated
         }));
       } catch (err) {
         console.warn("Local storage write error:", err);
@@ -500,28 +506,69 @@
       localStorage.setItem(GIST_CONFIG_KEY, JSON.stringify(cfg));
     }
 
-    function updateSyncStatusUI(text, isCloud) {
+    function updateSyncStatusUI(text, mode = "local", errorDetail = "") {
+      const pill = document.getElementById("autoSaveStatus");
       const label = document.getElementById("autoSaveLabel");
       const dot = document.getElementById("syncDot");
       const timeStr = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-      if (label) label.textContent = `${text} • ${timeStr}`;
-      if (dot) {
-        dot.className = isCloud
-          ? "w-2 h-2 rounded-full bg-emerald-500 animate-pulse"
-          : "w-2 h-2 rounded-full bg-amber-500";
+
+      if (mode === "error") {
+        if (pill) {
+          pill.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold cursor-pointer hover:bg-rose-100 transition";
+          pill.title = errorDetail || "Sync error";
+        }
+        if (dot) dot.className = "w-2 h-2 rounded-full bg-rose-500";
+        if (label) label.textContent = errorDetail ? `⚠️ Sync Error: ${errorDetail}` : "⚠️ Sync Error";
+        return;
       }
+
+      if (mode === "cloud") {
+        if (pill) {
+          pill.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium cursor-pointer hover:bg-emerald-100 transition";
+          pill.title = "Cloud Synced";
+        }
+        if (dot) dot.className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
+        if (label) label.textContent = `${text} • ${timeStr}`;
+        return;
+      }
+
+      if (pill) {
+        pill.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium cursor-pointer hover:bg-amber-100 transition";
+        pill.title = "Saved locally";
+      }
+      if (dot) dot.className = "w-2 h-2 rounded-full bg-amber-500";
+      if (label) label.textContent = `${text} • ${timeStr}`;
     }
 
-    async function pushToGist(statusLabel = "Cloud Synced") {
+    async function extractGitHubError(res) {
+      let msg = `HTTP ${res.status}`;
+      try {
+        const body = await res.json();
+        if (body && body.message) {
+          msg = `${res.status} ${body.message}`;
+        }
+      } catch {
+        if (res.statusText) msg = `${res.status} ${res.statusText}`;
+      }
+      return msg;
+    }
+
+    async function pushToGist(statusLabel = "Synced") {
       const cfg = getGistConfig();
       if (!cfg.token) {
-        updateSyncStatusUI("Local Saved", false);
+        updateSyncStatusUI("Local Saved", "local");
         return false;
       }
-      if (syncInFlight) return false;
+      if (syncInFlight) {
+        pendingPush = true;
+        return false;
+      }
       syncInFlight = true;
 
       try {
+        const timestamp = state.lastUpdated || new Date().toISOString();
+        state.lastUpdated = timestamp;
+
         const payload = {
           description: "NdroidHub Daily Kaam Tracker Sync Data",
           public: false,
@@ -529,7 +576,7 @@
             [GIST_FILENAME]: {
               content: JSON.stringify({
                 records: state.records,
-                updatedAt: new Date().toISOString()
+                lastUpdated: timestamp
               }, null, 2)
             }
           }
@@ -542,6 +589,7 @@
 
         const res = await fetch(endpoint, {
           method,
+          cache: "no-store",
           headers: {
             "Authorization": `Bearer ${cfg.token}`,
             "Accept": "application/vnd.github+json",
@@ -550,7 +598,11 @@
           body: JSON.stringify(payload)
         });
 
-        if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+        if (!res.ok) {
+          const errMsg = await extractGitHubError(res);
+          throw new Error(errMsg);
+        }
+
         const data = await res.json();
         if (!cfg.gistId && data.id) {
           cfg.gistId = data.id;
@@ -558,14 +610,18 @@
           const idInput = document.getElementById("gistIdInput");
           if (idInput) idInput.value = data.id;
         }
-        updateSyncStatusUI(`☁️ ${statusLabel}`, true);
+        updateSyncStatusUI(`☁️ ${statusLabel}`, "cloud");
         return true;
       } catch (err) {
         console.error("Gist push failed:", err);
-        updateSyncStatusUI("Local Saved (Sync Err)", false);
+        updateSyncStatusUI("", "error", err.message || "Network Error");
         return false;
       } finally {
         syncInFlight = false;
+        if (pendingPush) {
+          pendingPush = false;
+          pushToGist(statusLabel);
+        }
       }
     }
 
@@ -577,48 +633,62 @@
       }
 
       try {
-        const res = await fetch(`https://api.github.com/gists/${cfg.gistId}`, {
+        const res = await fetch(`https://api.github.com/gists/${cfg.gistId}?t=${Date.now()}`, {
+          cache: "no-store",
           headers: {
             "Authorization": `Bearer ${cfg.token}`,
             "Accept": "application/vnd.github+json"
           }
         });
-        if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+
+        if (!res.ok) {
+          const errMsg = await extractGitHubError(res);
+          throw new Error(errMsg);
+        }
+
         const data = await res.json();
         const file = data.files && data.files[GIST_FILENAME];
         if (file && file.content) {
           const parsed = JSON.parse(file.content);
           if (parsed && parsed.records) {
-            // Merge remote records with local records
-            Object.keys(parsed.records).forEach((dStr) => {
-              state.records[dStr] = {
-                ...(state.records[dStr] || {}),
-                ...parsed.records[dStr]
-              };
-            });
-            saveLocalRecords();
-            ensureDateBucket(state.selectedDate);
-            renderApp();
-            updateSyncStatusUI("☁️ Cloud Synced", true);
-            if (notify) showToast("☁️ Cloud se latest data pull ho gaya!");
+            const remoteUpdatedStr = parsed.lastUpdated || parsed.updatedAt || null;
+            const remoteTs = remoteUpdatedStr ? Date.parse(remoteUpdatedStr) : 0;
+            const localTs = state.lastUpdated ? Date.parse(state.lastUpdated) : 0;
+
+            if (remoteTs >= localTs) {
+              state.records = parsed.records;
+              state.lastUpdated = remoteUpdatedStr || new Date().toISOString();
+              saveLocalRecords(false);
+              ensureDateBucket(state.selectedDate);
+              renderApp();
+              updateSyncStatusUI("☁️ Synced", "cloud");
+              if (notify) showToast("☁️ Cloud se latest data pull ho gaya!");
+            } else {
+              // Local cache is newer than cloud; push local state up so cloud stays current
+              await pushToGist("Synced");
+              if (notify) showToast("☁️ Local data newer tha — cloud par sync kar diya gaya!");
+            }
             return true;
           }
         }
+        updateSyncStatusUI("☁️ Synced", "cloud");
+        return true;
       } catch (err) {
         console.error("Gist pull failed:", err);
-        if (notify) showToast("⚠️ Cloud data pull karne me error aaya.");
+        updateSyncStatusUI("", "error", err.message || "Network Error");
+        if (notify) showToast(`⚠️ Cloud pull error: ${err.message}`);
       }
       return false;
     };
 
-    function persistDateRecord(dateStr, statusLabel = "Auto-Saved") {
+    function persistDateRecord(dateStr, statusLabel = "Synced") {
       ensureDateBucket(dateStr);
-      saveLocalRecords();
+      saveLocalRecords(true);
       const cfg = getGistConfig();
       if (cfg.token) {
         pushToGist(statusLabel);
       } else {
-        updateSyncStatusUI(`💾 ${statusLabel}`, false);
+        updateSyncStatusUI("Local Saved", "local");
       }
     }
 
@@ -660,7 +730,7 @@
       localStorage.removeItem(GIST_CONFIG_KEY);
       document.getElementById("gistTokenInput").value = "";
       document.getElementById("gistIdInput").value = "";
-      updateSyncStatusUI("Local Saved", false);
+      updateSyncStatusUI("Local Saved", "local");
       showToast("🔌 Cloud Sync disconnect ho gaya (Local data safe hai).");
       window.closeSyncModal();
     };
@@ -981,7 +1051,7 @@
       `).join("");
     }
 
-    // Boot Application & Register Service Worker
+    // Boot Application, Auto-Pull on Open & Tab Focus, and Register Service Worker
     window.addEventListener("load", async () => {
       loadLocalRecords();
       renderApp();
@@ -995,6 +1065,15 @@
         navigator.serviceWorker.register("./sw.js").catch((err) => {
           console.warn("Service Worker registration skipped:", err);
         });
+      }
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        const cfg = getGistConfig();
+        if (cfg.token && cfg.gistId) {
+          window.pullFromGist(false);
+        }
       }
     });
   </script>

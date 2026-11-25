@@ -1,4 +1,4 @@
-const CACHE_NAME = "ndroidhub-tracker-v1";
+const CACHE_NAME = "ndroidhub-tracker-v2";
 const CORE_ASSETS = [
   "./",
   "./index.html",
