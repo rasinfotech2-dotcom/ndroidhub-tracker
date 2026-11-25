@@ -240,17 +240,22 @@
         </div>
       </div>
 
-      <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
-        <button onclick="disconnectGistSync()" class="px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 cursor-pointer">
-          Disconnect
+      <div class="pt-2 border-t border-slate-100 space-y-2.5">
+        <button onclick="copyMagicSetupLink()" class="w-full px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition cursor-pointer">
+          🔗 Copy Magic Setup Link (Phone / New PC ke liye)
         </button>
-        <div class="flex items-center gap-2">
-          <button onclick="pullFromGist(true)" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold cursor-pointer">
-            ⬇️ Pull Data
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <button onclick="disconnectGistSync()" class="px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 cursor-pointer">
+            Disconnect
           </button>
-          <button onclick="saveGistSettings()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold cursor-pointer">
-            Save & Sync Now
-          </button>
+          <div class="flex items-center gap-2">
+            <button onclick="pullFromGist(true)" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold cursor-pointer">
+              ⬇️ Pull Data
+            </button>
+            <button onclick="saveGistSettings()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold cursor-pointer">
+              Save & Sync Now
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1051,14 +1056,74 @@
       `).join("");
     }
 
-    // Boot Application, Auto-Pull on Open & Tab Focus, and Register Service Worker
+    window.copyMagicSetupLink = function () {
+      const cfg = getGistConfig();
+      const tokenInput = document.getElementById("gistTokenInput");
+      const gistIdInput = document.getElementById("gistIdInput");
+      const token = ((tokenInput && tokenInput.value) || cfg.token || "").trim();
+      const gistId = ((gistIdInput && gistIdInput.value) || cfg.gistId || "").trim();
+
+      if (!token) {
+        showToast("⚠️ Pehle GitHub Token daalein ya Save karein.");
+        return;
+      }
+
+      const payload = JSON.stringify({ token, gistId });
+      const encoded = btoa(unescape(encodeURIComponent(payload)));
+      const magicUrl = `https://rasinfotech2-dotcom.github.io/ndroidhub-tracker/#sync=${encoded}`;
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(magicUrl).then(() => {
+          showToast("🔗 Magic Setup Link copy ho gaya! Phone me open karein.");
+        }).catch(() => fallbackCopy(magicUrl));
+      } else {
+        fallbackCopy(magicUrl);
+      }
+    };
+
+    function applySyncFromUrlHash() {
+      const hash = window.location.hash || "";
+      if (!hash.startsWith("#sync=")) return false;
+
+      const rawEncoded = hash.slice(6).trim();
+      // Immediately clear hash so token never lingers in address bar/history
+      try {
+        history.replaceState(null, "", window.location.pathname + window.location.search);
+      } catch (e) {
+        console.warn("Could not clear URL hash:", e);
+      }
+
+      if (!rawEncoded) return false;
+
+      try {
+        const jsonStr = decodeURIComponent(escape(atob(decodeURIComponent(rawEncoded))));
+        const parsed = JSON.parse(jsonStr);
+        if (parsed && typeof parsed.token === "string" && parsed.token.trim()) {
+          saveGistConfig({
+            token: parsed.token.trim(),
+            gistId: typeof parsed.gistId === "string" ? parsed.gistId.trim() : ""
+          });
+          showToast("✨ Cloud Sync auto-configured!");
+          return true;
+        }
+      } catch (err) {
+        console.error("Invalid #sync hash:", err);
+        showToast("⚠️ Magic Setup Link invalid hai.");
+      }
+      return false;
+    }
+
+    // Boot Application, Auto-Config from URL Hash, Auto-Pull on Open & Tab Focus, and Register Service Worker
     window.addEventListener("load", async () => {
       loadLocalRecords();
       renderApp();
 
+      const configuredFromHash = applySyncFromUrlHash();
       const cfg = getGistConfig();
       if (cfg.token && cfg.gistId) {
-        await window.pullFromGist(false);
+        await window.pullFromGist(configuredFromHash);
+      } else if (configuredFromHash && cfg.token) {
+        await pushToGist("Synced");
       }
 
       if ("serviceWorker" in navigator) {
