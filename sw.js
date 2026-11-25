@@ -34,15 +34,15 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
 
-  // Never cache GitHub API calls (used for Gist Cloud Sync)
-  if (url.hostname === "api.github.com") {
+  // Never cache GitHub API or Gist raw content calls
+  if (url.hostname === "api.github.com" || url.hostname === "gist.githubusercontent.com") {
     return;
   }
 
-  // Network-first for HTML navigation, cache-first for static assets
+  // Network-first (revalidated) for HTML navigation, cache-first for static assets
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: "no-cache" })
         .then((response) => {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put("./index.html", clone));

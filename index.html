@@ -240,6 +240,14 @@
         </div>
       </div>
 
+      <!-- Sync Debug Status Box -->
+      <div id="syncDebugBox" class="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 space-y-1 font-mono">
+        <div><span class="font-bold text-slate-800">Gist ID:</span> <span id="debugGistId">Not set</span></div>
+        <div><span class="font-bold text-slate-800">Last Pull:</span> <span id="debugLastPull">—</span></div>
+        <div><span class="font-bold text-slate-800">Last Push:</span> <span id="debugLastPush">—</span></div>
+        <div id="debugErrorRow" class="hidden text-rose-600"><span class="font-bold">Error:</span> <span id="debugLastError"></span></div>
+      </div>
+
       <div class="pt-2 border-t border-slate-100 space-y-2.5">
         <button onclick="copyMagicSetupLink()" class="w-full px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition cursor-pointer">
           🔗 Copy Magic Setup Link (Phone / New PC ke liye)
@@ -447,7 +455,13 @@
 
     let deferredInstallPrompt = null;
     let syncInFlight = false;
+    let pullInFlight = false;
     let pendingPush = false;
+    const syncDebug = {
+      lastPull: "—",
+      lastPush: "—",
+      lastError: ""
+    };
 
     let state = {
       selectedDate: getTodayStr(),
@@ -511,29 +525,56 @@
       localStorage.setItem(GIST_CONFIG_KEY, JSON.stringify(cfg));
     }
 
+    function updateSyncDebugUI() {
+      const cfg = getGistConfig();
+      const idEl = document.getElementById("debugGistId");
+      const pullEl = document.getElementById("debugLastPull");
+      const pushEl = document.getElementById("debugLastPush");
+      const errRow = document.getElementById("debugErrorRow");
+      const errEl = document.getElementById("debugLastError");
+      if (idEl) idEl.textContent = cfg.gistId ? `${cfg.gistId.slice(0, 8)}…` : "Not set";
+      if (pullEl) pullEl.textContent = syncDebug.lastPull;
+      if (pushEl) pushEl.textContent = syncDebug.lastPush;
+      if (errRow && errEl) {
+        if (syncDebug.lastError) {
+          errRow.classList.remove("hidden");
+          errEl.textContent = syncDebug.lastError;
+        } else {
+          errRow.classList.add("hidden");
+          errEl.textContent = "";
+        }
+      }
+    }
+
     function updateSyncStatusUI(text, mode = "local", errorDetail = "") {
       const pill = document.getElementById("autoSaveStatus");
       const label = document.getElementById("autoSaveLabel");
       const dot = document.getElementById("syncDot");
       const timeStr = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+      const cfg = getGistConfig();
+      const gistPrefix = cfg.gistId ? ` (${cfg.gistId.slice(0, 6)}…)` : "";
 
       if (mode === "error") {
+        syncDebug.lastError = errorDetail || "Sync Error";
         if (pill) {
           pill.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold cursor-pointer hover:bg-rose-100 transition";
           pill.title = errorDetail || "Sync error";
         }
         if (dot) dot.className = "w-2 h-2 rounded-full bg-rose-500";
         if (label) label.textContent = errorDetail ? `⚠️ Sync Error: ${errorDetail}` : "⚠️ Sync Error";
+        updateSyncDebugUI();
         return;
       }
 
       if (mode === "cloud") {
+        syncDebug.lastError = "";
         if (pill) {
           pill.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium cursor-pointer hover:bg-emerald-100 transition";
-          pill.title = "Cloud Synced";
+          pill.title = `Cloud Synced${gistPrefix}`;
         }
         if (dot) dot.className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
-        if (label) label.textContent = `${text} • ${timeStr}`;
+        if (label) label.textContent = `${text}${gistPrefix} • ${timeStr}`;
+        updateSyncDebugUI();
         return;
       }
 
@@ -543,6 +584,7 @@
       }
       if (dot) dot.className = "w-2 h-2 rounded-full bg-amber-500";
       if (label) label.textContent = `${text} • ${timeStr}`;
+      updateSyncDebugUI();
     }
 
     async function extractGitHubError(res) {
@@ -615,10 +657,14 @@
           const idInput = document.getElementById("gistIdInput");
           if (idInput) idInput.value = data.id;
         }
+        const tNow = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        syncDebug.lastPush = `${tNow} (HTTP ${res.status})`;
         updateSyncStatusUI(`☁️ ${statusLabel}`, "cloud");
         return true;
       } catch (err) {
         console.error("Gist push failed:", err);
+        const tNow = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        syncDebug.lastPush = `${tNow} (Failed)`;
         updateSyncStatusUI("", "error", err.message || "Network Error");
         return false;
       } finally {
@@ -630,12 +676,22 @@
       }
     }
 
+    function parseTimestampSafe(tsStr) {
+      if (!tsStr) return 0;
+      const ms = Date.parse(tsStr);
+      return Number.isFinite(ms) ? ms : 0;
+    }
+
     window.pullFromGist = async function (notify = false) {
       const cfg = getGistConfig();
       if (!cfg.token || !cfg.gistId) {
         if (notify) showToast("⚠️ Pehle GitHub Token aur Gist ID save karein.");
         return false;
       }
+      if (syncInFlight || pullInFlight) {
+        return false;
+      }
+      pullInFlight = true;
 
       try {
         const res = await fetch(`https://api.github.com/gists/${cfg.gistId}?t=${Date.now()}`, {
@@ -652,36 +708,61 @@
         }
 
         const data = await res.json();
-        const file = data.files && data.files[GIST_FILENAME];
-        if (file && file.content) {
-          const parsed = JSON.parse(file.content);
-          if (parsed && parsed.records) {
-            const remoteUpdatedStr = parsed.lastUpdated || parsed.updatedAt || null;
-            const remoteTs = remoteUpdatedStr ? Date.parse(remoteUpdatedStr) : 0;
-            const localTs = state.lastUpdated ? Date.parse(state.lastUpdated) : 0;
-
-            if (remoteTs >= localTs) {
-              state.records = parsed.records;
-              state.lastUpdated = remoteUpdatedStr || new Date().toISOString();
-              saveLocalRecords(false);
-              ensureDateBucket(state.selectedDate);
-              renderApp();
-              updateSyncStatusUI("☁️ Synced", "cloud");
-              if (notify) showToast("☁️ Cloud se latest data pull ho gaya!");
-            } else {
-              // Local cache is newer than cloud; push local state up so cloud stays current
-              await pushToGist("Synced");
-              if (notify) showToast("☁️ Local data newer tha — cloud par sync kar diya gaya!");
-            }
-            return true;
-          }
+        const filesMap = data.files || {};
+        let file = filesMap[GIST_FILENAME];
+        if (!file) {
+          file = Object.values(filesMap).find((f) => f && typeof f.filename === "string" && f.filename.endsWith(".json"));
         }
-        updateSyncStatusUI("☁️ Synced", "cloud");
+        if (!file) {
+          throw new Error("Gist JSON file not found");
+        }
+
+        let rawContent = file.content;
+        if (file.truncated && file.raw_url) {
+          const rawRes = await fetch(`${file.raw_url}?t=${Date.now()}`, { cache: "no-store" });
+          if (!rawRes.ok) throw new Error(`Raw fetch HTTP ${rawRes.status}`);
+          rawContent = await rawRes.text();
+        }
+        if (!rawContent) {
+          throw new Error("Empty Gist file content");
+        }
+
+        const parsed = JSON.parse(rawContent);
+        if (!parsed || typeof parsed.records !== "object") {
+          throw new Error("Invalid Gist JSON format");
+        }
+
+        const tNow = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        syncDebug.lastPull = `${tNow} (HTTP ${res.status})`;
+
+        const remoteUpdatedStr = parsed.lastUpdated || parsed.updatedAt || null;
+        const remoteTs = parseTimestampSafe(remoteUpdatedStr);
+        const localTs = parseTimestampSafe(state.lastUpdated);
+
+        if (remoteTs >= localTs) {
+          state.records = parsed.records;
+          state.lastUpdated = remoteUpdatedStr || new Date().toISOString();
+          saveLocalRecords(false);
+          ensureDateBucket(state.selectedDate);
+          renderApp();
+          updateSyncStatusUI("☁️ Synced", "cloud");
+          if (notify) showToast("☁️ Cloud se latest data pull ho gaya!");
+        } else {
+          // Local cache is strictly newer than cloud; push local state up so cloud stays current
+          pullInFlight = false;
+          await pushToGist("Synced");
+          if (notify) showToast("☁️ Local data newer tha — cloud par sync kar diya gaya!");
+          return true;
+        }
         return true;
       } catch (err) {
         console.error("Gist pull failed:", err);
+        const tNow = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        syncDebug.lastPull = `${tNow} (Failed)`;
         updateSyncStatusUI("", "error", err.message || "Network Error");
         if (notify) showToast(`⚠️ Cloud pull error: ${err.message}`);
+      } finally {
+        pullInFlight = false;
       }
       return false;
     };
@@ -704,6 +785,7 @@
       const cfg = getGistConfig();
       document.getElementById("gistTokenInput").value = cfg.token || "";
       document.getElementById("gistIdInput").value = cfg.gistId || "";
+      updateSyncDebugUI();
       document.getElementById("syncModal").classList.remove("hidden");
     };
 
@@ -720,14 +802,21 @@
       }
       saveGistConfig({ token, gistId });
       if (gistId) {
-        await window.pullFromGist(false);
+        const pulled = await window.pullFromGist(false);
+        if (pulled) {
+          showToast("☁️ Cloud Sync ON ho gaya! Existing Gist data load ho gaya.");
+          window.closeSyncModal();
+        } else {
+          showToast("⚠️ Gist pull fail hua — Token ya Gist ID check karein.");
+        }
+        return;
       }
       const ok = await pushToGist("Cloud Synced");
       if (ok) {
-        showToast("☁️ Cloud Sync ON ho gaya! Ab mobile & laptop synced rahenge.");
+        showToast("☁️ Naya Gist ban gaya & Cloud Sync ON ho gaya!");
         window.closeSyncModal();
       } else {
-        showToast("⚠️ Token ya Gist ID check karein.");
+        showToast("⚠️ Token check karein.");
       }
     };
 
@@ -1065,6 +1154,10 @@
 
       if (!token) {
         showToast("⚠️ Pehle GitHub Token daalein ya Save karein.");
+        return;
+      }
+      if (!gistId) {
+        showToast("⚠️ Pehle 'Save & Sync Now' dabakar Gist ID banayein, phir Magic Link copy karein.");
         return;
       }
 
